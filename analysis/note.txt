@@ -1,0 +1,9 @@
+/home/nanopore/Desktop/test/twist/pass
+
+python /1_CallSNV.py -b 
+
+
+
+Two barcoding layers
+    ONT barcoding e.g., SQK-NBD114, LSK-...
+    TWIST barcodeing e.g., Twist-96A-UDI
