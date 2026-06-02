@@ -16,6 +16,7 @@ PATH_BED            =f'{DIR_reference}/TargetGenesAndFusions.bed'
 PATH_GF_WHITELIST   =f'{DIR_reference}/known_genefusions.tsv'
 mm2_idx             =f'{DIR_reference}/hg38_map_ont.mmi'
 gnomAD              =f'{DIR_reference}/Variant_to_AF.pickle'
+PATH_GeneFusion_prev_results=f'{DIR_reference}/GeneFusion_260602.tsv'
 
 minimum_coverage=10
 PATH_JAVA='java'

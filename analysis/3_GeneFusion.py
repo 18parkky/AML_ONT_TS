@@ -1,6 +1,9 @@
 import os, time, glob, math, argparse, logging, subprocess, multiprocessing
 import pysam, pandas as pd, numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
 import utility, config
+from sklearn.linear_model import LogisticRegression
 
 def count_lines(filepath):
     return int(subprocess.check_output(['wc', '-l', filepath]).split()[0])
@@ -169,6 +172,17 @@ def main():
         os.remove(f'{DIR_GeneFusion_out}/{barcode}/{barcode}.segmented.fq')
 
     # Summarize alignments & Calling gene fusions
+    GeneFusion_260602 = pd.read_csv(config.PATH_GeneFusion_prev_results, sep='\t')
+    GeneFusion_260602['log_n'] = [ np.log10(n+1) for n in GeneFusion_260602['n'] ]
+    GeneFusion_260602['log_std1'] = [ np.log10(std1+1) for std1 in GeneFusion_260602['std1'] ]
+    GeneFusion_260602['log_std2'] = [ np.log10(std2+1) for std2 in GeneFusion_260602['std2'] ]
+    GeneFusion_260602['log_std_avg'] = [ np.log10(tup.std1+tup.std2+1) for tup in GeneFusion_260602.itertuples() ]
+
+    X = GeneFusion_260602[['log_n','log_std1','log_std2']]
+    y = GeneFusion_260602['isTrue']
+    clf = LogisticRegression()
+    clf.fit(X,y)
+
     elapsed_time = utility.elapsedTime( start_time )
     logging.info(f'Summarizing alignment results and calling gene fusions (elapsed time: {round(elapsed_time, 2)}s)')
     TargetGenes = pd.read_csv(config.PATH_BED, sep='\t', )
@@ -252,9 +266,26 @@ def main():
             GeneFusionDetections.append( [GeneFusion, known, len(edf), int(np.std( edf['Breakpoint1'] )), int(np.std( edf['Breakpoint2'] ))] )
             
         GeneFusionDetections = pd.DataFrame(GeneFusionDetections, columns=['GeneFusion', 'known', 'n', 'std1' ,'std2'])
-
-        GeneFusionDetections.sort_values(['known', 'n'], ascending=False, inplace=True)
         GeneFusionDetections.reset_index(inplace=True, drop=True)
+
+        GeneFusionDetections['log_n'] = [ np.log10(n+1) for n in GeneFusionDetections['n'] ]
+        GeneFusionDetections['log_std1'] = [ np.log10(std1+1) for std1 in GeneFusionDetections['std1'] ]
+        GeneFusionDetections['log_std2'] = [ np.log10(std2+1) for std2 in GeneFusionDetections['std2'] ]
+        GeneFusionDetections['log_std_avg'] = [ np.log10(tup.std1+tup.std2+1) for tup in GeneFusionDetections.itertuples() ]
+        
+        # (1) Logistics Regression for scoring
+        X = GeneFusionDetections[['log_n','log_std1','log_std2']]
+        GeneFusionDetections['fusion_probability'] = clf.predict_proba(X)[:,1]
+        GeneFusionDetections.sort_values(['fusion_probability', 'n', 'known'], ascending=False, inplace=True)
+        GeneFusionDetections.reset_index(inplace=True, drop=True)
+
+        # (2) n x std plot for support
+        fig, axes = plt.subplots(1, 2, figsize=(9, 4), dpi=400, sharex=True, sharey=True,)
+        sns.scatterplot(data=GeneFusion_260602, x='log_n', y='log_std_avg', hue='isTrue', legend=None, palette={True: 'red', False:'black'}, ax=axes[0])
+        sns.scatterplot(data=GeneFusionDetections, x='log_n', y='log_std_avg', color='lightcoral', ax=axes[1])
+        plt.tight_layout()
+        fig.savefig(f'{DIR_GeneFusion_out}/{barcode}/{barcode}.scatter.png', bbox_inches='tight')
+        plt.close(fig)
 
         GeneFusionDetections_ReadLevel.to_csv(f'{DIR_GeneFusion_out}/{barcode}/{barcode}.GeneFusion_ReadLevel.tsv', sep='\t', index=False)
         GeneFusionDetections.to_csv(f'{DIR_GeneFusion_out}/{barcode}/{barcode}.GeneFusion.tsv', sep='\t', index=False)
